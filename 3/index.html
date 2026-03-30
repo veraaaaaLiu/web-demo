@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Scroll × Video — Background Demo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:ital,wght@0,300;0,400;1,300&display=swap"
+    rel="stylesheet" />
+
+  <!-- ═══════════════════════════════════════════════════════
+       SCSS (compiled inline) — written in SCSS-style comments
+       for readability; the actual CSS follows
+  ════════════════════════════════════════════════════════ -->
+  <style>
+    /* ── Reset ─────────────────────────────────── */
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      scroll-behavior: auto;
+    }
+
+    /* ── Variables (SCSS → CSS custom props) ───── */
+    :root {
+      --font-display: 'Bebas Neue', cursive;
+      --font-mono: 'DM Mono', monospace;
+      --ease-snap: cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    body {
+      font-family: var(--font-mono);
+      background: #000;
+      overflow-x: hidden;
+      cursor: none;
+    }
+
+    /* ── Custom cursor ──────────────────────────── */
+    .cursor {
+      position: fixed;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #fff;
+      mix-blend-mode: difference;
+      pointer-events: none;
+      z-index: 9999;
+      transform: translate(-50%, -50%);
+      transition: width .2s, height .2s, border-radius .2s;
+      will-change: left, top;
+    }
+
+    .cursor.expand {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+    }
+
+    /* ── Video background stack ─────────────────── */
+    /* SCSS mixin concept: stack all videos, fade between them */
+    #video-stage {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      background: #000;
+    }
+
+    .video-bg {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      /* transition handled by JS for precise scroll control */
+    }
+
+    .video-bg video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    /* Dark overlay on each video for text legibility */
+    .video-bg::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.38);
+    }
+
+    /* Grain / noise texture overlay */
+    .grain {
+      position: fixed;
+      inset: -50%;
+      width: 200%;
+      height: 200%;
+      z-index: 1;
+      pointer-events: none;
+      opacity: 0.035;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+      animation: grain-shift 0.15s steps(1) infinite;
+    }
+
+    @keyframes grain-shift {
+      0% {
+        transform: translate(0, 0);
+      }
+
+      25% {
+        transform: translate(-2%, -3%);
+      }
+
+      50% {
+        transform: translate(3%, 1%);
+      }
+
+      75% {
+        transform: translate(-1%, 4%);
+      }
+    }
+
+    /* ── HUD — seconds display ──────────────────── */
+    .hud {
+      position: fixed;
+      top: 50%;
+      right: 3.5rem;
+      transform: translateY(-50%);
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: .4rem;
+      pointer-events: none;
+      mix-blend-mode: exclusion;
+    }
+
+    .hud__eyebrow {
+      font-family: var(--font-mono);
+      font-size: .55rem;
+      letter-spacing: .3em;
+      text-transform: uppercase;
+      color: #fff;
+      opacity: .45;
+    }
+
+    .hud__big {
+      font-family: var(--font-display);
+      font-size: clamp(3.5rem, 9vw, 8rem);
+      line-height: .92;
+      color: #fff;
+      letter-spacing: -.02em;
+    }
+
+    .hud__big .colon {
+      animation: blink 1s step-end infinite;
+    }
+
+    @keyframes blink {
+
+      0%,
+      100% {
+        opacity: 1
+      }
+
+      50% {
+        opacity: 0
+      }
+    }
+
+    .hud__bar-wrap {
+      width: 2px;
+      height: 100px;
+      background: rgba(255, 255, 255, .12);
+      border-radius: 1px;
+      overflow: hidden;
+      align-self: flex-end;
+      margin-top: .6rem;
+    }
+
+    .hud__bar {
+      width: 100%;
+      background: #fff;
+      border-radius: 1px;
+      height: 0%;
+    }
+
+    /* ── Dot nav ────────────────────────────────── */
+    .dot-nav {
+      position: fixed;
+      left: 2.5rem;
+      top: 50%;
+      transform: translateY(-50%);
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      gap: .8rem;
+      mix-blend-mode: exclusion;
+    }
+
+    .dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, .35);
+      cursor: pointer;
+      transition: background .3s, transform .3s;
+    }
+
+    .dot.active {
+      background: #fff;
+      transform: scale(2);
+    }
+
+    /* ── Sections ───────────────────────────────── */
+    .sections-wrap {
+      position: relative;
+      z-index: 2;
+    }
+
+    .section {
+      height: 100vh;
+      width: 100%;
+      display: flex;
+      align-items: center;
+      padding: 0 clamp(2rem, 9vw, 9rem);
+      position: relative;
+      color: #fff;
+    }
+
+    .section__inner {
+      max-width: 820px;
+    }
+
+    .section__tag {
+      font-family: var(--font-mono);
+      font-size: .58rem;
+      letter-spacing: .3em;
+      text-transform: uppercase;
+      opacity: .5;
+      margin-bottom: 1.4rem;
+      display: flex;
+      align-items: center;
+      gap: .8rem;
+    }
+
+    .section__tag::before {
+      content: '';
+      display: block;
+      width: 28px;
+      height: 1px;
+      background: currentColor;
+      opacity: .5;
+    }
+
+    .section__title {
+      font-family: var(--font-display);
+      font-size: clamp(3.8rem, 11vw, 10.5rem);
+      line-height: .88;
+      letter-spacing: -.01em;
+      margin-bottom: 2rem;
+      white-space: pre-line;
+      transform: translateY(55px);
+      opacity: 0;
+      transition:
+        transform .75s var(--ease-snap),
+        opacity .75s ease;
+    }
+
+    .section__body {
+      font-size: clamp(.8rem, 1.1vw, .92rem);
+      line-height: 1.78;
+      max-width: 440px;
+      opacity: 0;
+      transform: translateY(28px);
+      transition:
+        transform .75s .12s var(--ease-snap),
+        opacity .75s .12s ease;
+    }
+
+    .section__time {
+      position: absolute;
+      bottom: 2.5rem;
+      left: clamp(2rem, 9vw, 9rem);
+      font-family: var(--font-mono);
+      font-size: .58rem;
+      letter-spacing: .2em;
+      opacity: .35;
+      text-transform: uppercase;
+    }
+
+    /* Ghost number in corner */
+    .section__ghost {
+      position: absolute;
+      right: -3vw;
+      top: 50%;
+      transform: translateY(-50%);
+      font-family: var(--font-display);
+      font-size: clamp(14rem, 30vw, 32rem);
+      line-height: 1;
+      color: #fff;
+      opacity: .04;
+      pointer-events: none;
+      user-select: none;
+    }
+
+    /* Thin rule between sections */
+    .section::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: clamp(2rem, 9vw, 9rem);
+      right: clamp(2rem, 9vw, 9rem);
+      height: 1px;
+      background: rgba(255, 255, 255, .07);
+    }
+
+    .section.is-visible .section__title {
+      transform: translateY(0);
+      opacity: 1;
+    }
+
+    .section.is-visible .section__body {
+      transform: translateY(0);
+      opacity: 1;
+    }
+
+    /* ── Scroll cue ─────────────────────────────── */
+    .scroll-cue {
+      position: fixed;
+      bottom: 2rem;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: .4rem;
+      pointer-events: none;
+      mix-blend-mode: exclusion;
+      transition: opacity .5s;
+    }
+
+    .scroll-cue span {
+      font-family: var(--font-mono);
+      font-size: .52rem;
+      letter-spacing: .3em;
+      text-transform: uppercase;
+      color: #fff;
+      opacity: .45;
+    }
+
+    .scroll-cue__line {
+      width: 1px;
+      height: 44px;
+      background: linear-gradient(to bottom, rgba(255, 255, 255, .5), transparent);
+      animation: pulse-down 1.6s ease-in-out infinite;
+    }
+
+    @keyframes pulse-down {
+
+      0%,
+      100% {
+        transform: scaleY(1);
+        transform-origin: top;
+      }
+
+      50% {
+        transform: scaleY(.55);
+        transform-origin: top;
+      }
+    }
+
+    .scroll-cue.hidden {
+      opacity: 0;
+    }
+
+    /* ── Loading overlay ────────────────────────── */
+    #loader {
+      position: fixed;
+      inset: 0;
+      z-index: 500;
+      background: #000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 1rem;
+      transition: opacity .6s ease, visibility .6s;
+    }
+
+    #loader.gone {
+      opacity: 0;
+      visibility: hidden;
+    }
+
+    #loader p {
+      font-family: var(--font-mono);
+      font-size: .6rem;
+      letter-spacing: .25em;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, .4);
+    }
+
+    .loader-bar-wrap {
+      width: 180px;
+      height: 1px;
+      background: rgba(255, 255, 255, .12);
+    }
+
+    .loader-bar {
+      height: 100%;
+      background: #fff;
+      width: 0%;
+      transition: width .1s linear;
+    }
+
+    @media (max-width: 768px) {
+      .hud {
+        right: 1.5rem;
+      }
+
+      .dot-nav {
+        left: 1rem;
+      }
+
+      .section {
+        padding: 0 1.5rem;
+      }
+
+      .section__time {
+        left: 1.5rem;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- Loader -->
+  <div id="loader">
+    <p>Loading videos</p>
+    <div class="loader-bar-wrap">
+      <div class="loader-bar" id="loader-bar"></div>
+    </div>
+  </div>
+
+  <!-- Grain texture -->
+  <div class="grain"></div>
+
+  <!-- Custom cursor -->
+  <div class="cursor"></div>
+
+  <!-- Video backgrounds stack -->
+  <div id="video-stage"></div>
+
+  <!-- HUD -->
+  <div class="hud">
+    <div class="hud__eyebrow">elapsed · sec</div>
+    <div class="hud__big">
+      00<span class="colon">:</span><span id="timer-sec">00</span>
+    </div>
+    <div class="hud__bar-wrap">
+      <div class="hud__bar" id="hud-bar"></div>
+    </div>
+  </div>
+
+  <!-- Dot nav -->
+  <nav class="dot-nav" id="dot-nav"></nav>
+
+  <!-- Scroll cue -->
+  <div class="scroll-cue" id="scroll-cue">
+    <span>scroll</span>
+    <div class="scroll-cue__line"></div>
+  </div>
+
+  <!-- Sections -->
+  <div class="sections-wrap" id="sections-wrap"></div>
+
+  <!-- ═══════════════════════════════════════════════════════
+     JavaScript — scroll engine + video crossfade
+════════════════════════════════════════════════════════ -->
+  <script>
+    'use strict';
+
+    // ── Section data ─────────────────────────────────────────────
+    // Videos: free Mixkit CDN (no auth required, autoplay ok)
+    const SECTIONS = [
+      {
+        seconds: 0,
+        video: 'video.mp4',
+        poster: '',
+        label: '§ 001 — CITY',
+        tag: 'Night City',
+        title: 'NEON\nPULSE\nURBAN',
+        body: 'Zero seconds. The city breathes in neon, its arteries lit amber. Traffic moves like slow blood through glass canyons.',
+        ts: '00h 00m 00s',
+        ghost: '00',
+      },
+      {
+        seconds: 8,
+        video: 'video.mp4',
+        label: '§ 002 — OCEAN',
+        tag: 'Deep Water',
+        title: 'TIDE\nRUNS\nFORWARD',
+        body: 'Eight seconds at sea level. Waves rehearse their eternal collapse, indifferent and immense.',
+        ts: '00h 00m 08s',
+        ghost: '08',
+      },
+      {
+        seconds: 17,
+        video: 'video.mp4',
+        label: '§ 003 — SKY',
+        tag: 'Above Clouds',
+        title: 'ABOVE\nTHE\nNOISE',
+        body: 'Seventeen seconds above the cloudline. Silence at altitude. The world\'s arguments dissolve into white and blue.',
+        ts: '00h 00m 17s',
+        ghost: '17',
+      },
+      {
+        seconds: 29,
+        video: 'video.mp4',
+        label: '§ 004 — FOREST',
+        tag: 'Old Growth',
+        title: 'ROOT\nSYSTEM\nACTIVE',
+        body: 'Twenty-nine seconds underground. The forest communicates in chemical language. Patient. Enormous. Alive.',
+        ts: '00h 00m 29s',
+        ghost: '29',
+      },
+      {
+        seconds: 38,
+        video: 'video.mp4',
+        label: '§ 005 — FIRE',
+        tag: 'Combustion',
+        title: 'HEAT\nIN THE\nWIRES',
+        body: 'Thirty-eight seconds of combustion. Flames remember the shape of every fuel that fed them, then forget completely.',
+        ts: '00h 00m 38s',
+        ghost: '38',
+      },
+      {
+        seconds: 52,
+        video: 'video.mp4',
+        label: '§ 006 — STARS',
+        tag: 'Deep Space',
+        title: 'LAST\nKNOWN\nFREQUENCY',
+        body: 'Fifty-two seconds. The signal finally reaches deep space — expanding forever at the speed of light, dimming but never stopping.',
+        ts: '00h 00m 52s',
+        ghost: '52',
+      },
+    ];
+
+    // ── Build DOM ────────────────────────────────────────────────
+    const stage = document.getElementById('video-stage');
+    const secWrap = document.getElementById('sections-wrap');
+    const dotNav = document.getElementById('dot-nav');
+    const videoEls = [];
+
+    SECTIONS.forEach((s, i) => {
+      // video bg
+      const vbg = document.createElement('div');
+      vbg.className = 'video-bg';
+      vbg.id = `vbg-${i}`;
+
+      const vid = document.createElement('video');
+      vid.src = s.video;
+      vid.autoplay = true;
+      vid.muted = true;
+      vid.loop = true;
+      vid.playsInline = true;
+      vid.preload = 'auto';
+      if (s.poster) vid.poster = s.poster;
+
+      vbg.appendChild(vid);
+      stage.appendChild(vbg);
+      videoEls.push(vbg);
+
+      // section
+      const sec = document.createElement('div');
+      sec.className = 'section';
+      sec.innerHTML = `
+    <div class="section__inner">
+      <div class="section__tag">${s.tag}</div>
+      <h2 class="section__title">${s.title}</h2>
+      <p class="section__body">${s.body}</p>
+    </div>
+    <div class="section__ghost">${s.ghost}</div>
+    <div class="section__time">${s.ts} &nbsp;·&nbsp; ${s.label}</div>
+  `;
+      secWrap.appendChild(sec);
+
+      // dot
+      const dot = document.createElement('div');
+      dot.className = 'dot';
+      dot.dataset.i = i;
+      dotNav.appendChild(dot);
+    });
+
+    // ── Loader — track video readiness ──────────────────────────
+    const loaderEl = document.getElementById('loader');
+    const loaderBar = document.getElementById('loader-bar');
+    let loaded = 0;
+
+    function checkLoaded() {
+      loaded++;
+      loaderBar.style.width = (loaded / SECTIONS.length * 100) + '%';
+      if (loaded >= SECTIONS.length) {
+        setTimeout(() => loaderEl.classList.add('gone'), 200);
+      }
+    }
+
+    // Try to detect when videos can play; fall back to a small timeout
+    videoEls.forEach(vbg => {
+      const v = vbg.querySelector('video');
+      if (v.readyState >= 3) { checkLoaded(); return; }
+      v.addEventListener('canplaythrough', checkLoaded, { once: true });
+      // Safety fallback: if video never loads, dismiss after 3.5s
+      setTimeout(checkLoaded, 3500);
+    });
+
+    // ── State ────────────────────────────────────────────────────
+    let current = 0;
+    let displaySec = 0, targetSec = 0;
+    let cx = 0, cy = 0, tx = 0, ty = 0;
+
+    const sections = document.querySelectorAll('.section');
+    const dots = document.querySelectorAll('.dot');
+    const timerEl = document.getElementById('timer-sec');
+    const hudBar = document.getElementById('hud-bar');
+    const cursor = document.querySelector('.cursor');
+    const scrollCue = document.getElementById('scroll-cue');
+
+    // ── Helper: lerp ─────────────────────────────────────────────
+    function lerp(a, b, t) { return a + (b - a) * t; }
+
+    // ── Activate section ─────────────────────────────────────────
+    function activate(idx) {
+      if (idx === current) return;
+      current = idx;
+      targetSec = SECTIONS[idx].seconds;
+      dots.forEach((d, i) => d.classList.toggle('active', i === idx));
+    }
+
+    // ── Scroll handler ───────────────────────────────────────────
+    function onScroll() {
+      const sy = window.scrollY;
+      const winH = window.innerHeight;
+      const totH = document.body.scrollHeight - winH;
+      const prog = Math.min(sy / totH, 1);
+
+      hudBar.style.height = (prog * 100) + '%';
+      if (sy > 60) scrollCue.classList.add('hidden');
+
+      // raw fractional index
+      const raw = sy / winH;
+      const fi = Math.min(Math.floor(raw), SECTIONS.length - 1);
+      const ci = Math.min(fi + 1, SECTIONS.length - 1);
+      const t = raw - fi;   // 0 → 1 within the transition
+
+      // crossfade video opacities
+      videoEls.forEach((vbg, i) => {
+        let op = 0;
+        if (i === fi && i === ci) {
+          op = 1;                    // only one section, stays full
+        } else if (i === fi) {
+          op = 1 - t;                // current fades out
+        } else if (i === ci) {
+          op = t;                    // next fades in
+        }
+        vbg.style.opacity = op;
+      });
+
+      // dominant section for HUD / dot
+      activate(t > 0.5 ? ci : fi);
+
+      // text reveals
+      sections.forEach(sec => {
+        const r = sec.getBoundingClientRect();
+        sec.classList.toggle('is-visible', r.top < winH * 0.65 && r.bottom > winH * 0.35);
+      });
+    }
+
+    // ── Dot nav ──────────────────────────────────────────────────
+    dots.forEach((d, i) => {
+      d.addEventListener('click', () => {
+        window.scrollTo({ top: i * window.innerHeight, behavior: 'smooth' });
+      });
+    });
+
+    // ── Cursor ───────────────────────────────────────────────────
+    document.addEventListener('mousemove', e => { tx = e.clientX; ty = e.clientY; });
+    document.addEventListener('mousedown', () => cursor.classList.add('expand'));
+    document.addEventListener('mouseup', () => cursor.classList.remove('expand'));
+
+    // ── RAF loop ─────────────────────────────────────────────────
+    function loop() {
+      // smooth cursor
+      cx = lerp(cx, tx, 0.14);
+      cy = lerp(cy, ty, 0.14);
+      cursor.style.left = cx + 'px';
+      cursor.style.top = cy + 'px';
+
+      // smooth seconds counter
+      const diff = Math.abs(displaySec - targetSec);
+      if (diff > 0.25) {
+        displaySec = lerp(displaySec, targetSec, diff > 5 ? 0.06 : 0.09);
+        timerEl.textContent = Math.round(displaySec).toString().padStart(2, '0');
+      } else {
+        displaySec = targetSec;
+        timerEl.textContent = targetSec.toString().padStart(2, '0');
+      }
+
+      requestAnimationFrame(loop);
+    }
+
+    // ── Init ─────────────────────────────────────────────────────
+    window.addEventListener('scroll', onScroll, { passive: true });
+    dots[0]?.classList.add('active');
+    videoEls[0].style.opacity = '1';  // show first video immediately
+    sections[0]?.classList.add('is-visible');
+    loop();
+  </script>
+</body>
+
+</html>

@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Scroll × Time — Background Demo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:ital,wght@0,300;0,400;1,300&display=swap"
+    rel="stylesheet" />
+  <style>
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      scroll-behavior: auto;
+    }
+
+    body {
+      font-family: "DM Mono", monospace;
+      background: #0a0a0f;
+      overflow-x: hidden;
+      cursor: none;
+    }
+
+    .cursor {
+      position: fixed;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: currentColor;
+      pointer-events: none;
+      z-index: 9999;
+      mix-blend-mode: exclusion;
+      transform: translate(-50%, -50%);
+      transition: transform 0.1s ease, width 0.2s ease, height 0.2s ease;
+    }
+
+    .cursor.expand {
+      width: 40px;
+      height: 40px;
+    }
+
+    #bg-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      background-color: #0a0a0f;
+    }
+
+    .hud {
+      position: fixed;
+      top: 50%;
+      right: 3rem;
+      transform: translateY(-50%);
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 0.5rem;
+      mix-blend-mode: exclusion;
+      pointer-events: none;
+    }
+
+    .hud__label {
+      font-family: "DM Mono", monospace;
+      font-size: 0.6rem;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      color: #fff;
+      opacity: 0.5;
+    }
+
+    .hud__timer {
+      font-family: "Bebas Neue", cursive;
+      font-size: clamp(3rem, 8vw, 7rem);
+      line-height: 1;
+      color: #fff;
+      letter-spacing: -0.02em;
+    }
+
+    .hud__timer .colon {
+      animation: blink 1s step-end infinite;
+    }
+
+    .hud__progress-wrap {
+      width: 2px;
+      height: 120px;
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 1px;
+      overflow: hidden;
+      align-self: flex-end;
+      margin-top: 0.5rem;
+    }
+
+    .hud__progress-bar {
+      width: 100%;
+      background: #fff;
+      border-radius: 1px;
+      height: 0%;
+      transition: height 0.08s linear;
+    }
+
+    @keyframes blink {
+
+      0%,
+      100% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0;
+      }
+    }
+
+    .dot-nav {
+      position: fixed;
+      left: 2rem;
+      top: 50%;
+      transform: translateY(-50%);
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      mix-blend-mode: exclusion;
+    }
+
+    .dot-nav .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.3);
+      cursor: pointer;
+      transition: background 0.3s ease, transform 0.3s ease;
+    }
+
+    .dot-nav .dot.active {
+      background: #fff;
+      transform: scale(1.8);
+    }
+
+    .sections-wrap {
+      position: relative;
+      z-index: 1;
+    }
+
+    .section {
+      height: 100vh;
+      width: 100%;
+      display: flex;
+      align-items: center;
+      padding: 0 clamp(2rem, 8vw, 8rem);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .section__inner {
+      max-width: 900px;
+    }
+
+    .section__index {
+      font-family: "DM Mono", monospace;
+      font-size: 0.65rem;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      margin-bottom: 1.5rem;
+      opacity: 0.45;
+    }
+
+    .section__title {
+      font-family: "Bebas Neue", cursive;
+      font-size: clamp(4rem, 12vw, 11rem);
+      line-height: 0.88;
+      letter-spacing: -0.01em;
+      margin-bottom: 2rem;
+      transition: transform 0.7s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.7s ease;
+      transform: translateY(60px);
+      opacity: 0;
+      white-space: pre-line;
+    }
+
+    .section__body {
+      font-family: "DM Mono", monospace;
+      font-size: clamp(0.82rem, 1.1vw, 0.95rem);
+      line-height: 1.75;
+      max-width: 480px;
+      opacity: 0;
+      transform: translateY(30px);
+      transition: transform 0.7s 0.12s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.7s 0.12s ease;
+    }
+
+    .section__timestamp {
+      position: absolute;
+      bottom: 2.5rem;
+      left: clamp(2rem, 8vw, 8rem);
+      font-family: "DM Mono", monospace;
+      font-size: 0.65rem;
+      letter-spacing: 0.2em;
+      opacity: 0.35;
+      text-transform: uppercase;
+    }
+
+    .section__deco {
+      position: absolute;
+      right: -4vw;
+      top: 50%;
+      transform: translateY(-50%);
+      font-family: "Bebas Neue", cursive;
+      font-size: clamp(12rem, 28vw, 28rem);
+      line-height: 1;
+      opacity: 0.045;
+      letter-spacing: -0.05em;
+      pointer-events: none;
+      user-select: none;
+    }
+
+    /* Per-section foreground colors */
+    .section:nth-child(1) {
+      color: #e8ff00;
+    }
+
+    .section:nth-child(2) {
+      color: #fff5e0;
+    }
+
+    .section:nth-child(3) {
+      color: #ffedcf;
+    }
+
+    .section:nth-child(4) {
+      color: #0d0d0d;
+    }
+
+    .section:nth-child(5) {
+      color: #f5f0ff;
+    }
+
+    .section:nth-child(6) {
+      color: #fff0e0;
+    }
+
+    .section.is-visible .section__title {
+      transform: translateY(0);
+      opacity: 1;
+    }
+
+    .section.is-visible .section__body {
+      transform: translateY(0);
+      opacity: 1;
+    }
+
+    /* Divider line at section transition */
+    .section::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: clamp(2rem, 8vw, 8rem);
+      right: clamp(2rem, 8vw, 8rem);
+      height: 1px;
+      background: currentColor;
+      opacity: 0.08;
+    }
+
+    .scanlines {
+      position: fixed;
+      inset: 0;
+      z-index: 200;
+      pointer-events: none;
+      background: repeating-linear-gradient(to bottom,
+          transparent 0px,
+          transparent 3px,
+          rgba(0, 0, 0, 0.025) 3px,
+          rgba(0, 0, 0, 0.025) 4px);
+    }
+
+    .scroll-cue {
+      position: fixed;
+      bottom: 2rem;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.4rem;
+      mix-blend-mode: exclusion;
+      pointer-events: none;
+      transition: opacity 0.5s ease;
+    }
+
+    .scroll-cue span {
+      font-family: "DM Mono", monospace;
+      font-size: 0.55rem;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: #fff;
+      opacity: 0.5;
+    }
+
+    .scroll-cue__arrow {
+      width: 1px;
+      height: 40px;
+      background: linear-gradient(to bottom, rgba(255, 255, 255, 0.5), transparent);
+      animation: arrow-pulse 1.5s ease-in-out infinite;
+    }
+
+    .scroll-cue.hidden {
+      opacity: 0;
+    }
+
+    @keyframes arrow-pulse {
+
+      0%,
+      100% {
+        transform: scaleY(1);
+        transform-origin: top;
+      }
+
+      50% {
+        transform: scaleY(0.6);
+        transform-origin: top;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .hud {
+        right: 1.5rem;
+      }
+
+      .hud__timer {
+        font-size: 3rem;
+      }
+
+      .dot-nav {
+        left: 1rem;
+      }
+
+      .section {
+        padding: 0 1.5rem;
+      }
+
+      .section__timestamp {
+        left: 1.5rem;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- Fixed background layer -->
+  <div id="bg-overlay"></div>
+
+  <!-- Scanline texture -->
+  <div class="scanlines"></div>
+
+  <!-- Custom cursor -->
+  <div class="cursor"></div>
+
+  <!-- HUD — time display -->
+  <div class="hud">
+    <div class="hud__label">elapsed — sec</div>
+    <div class="hud__timer">
+      00<span class="colon">:</span><span id="timer-seconds">00</span>
+    </div>
+    <div class="hud__progress-wrap">
+      <div class="hud__progress-bar" id="hud-progress"></div>
+    </div>
+  </div>
+
+  <!-- Section dot nav -->
+  <nav class="dot-nav" id="dot-nav"></nav>
+
+  <!-- Scroll cue -->
+  <div class="scroll-cue">
+    <span>scroll</span>
+    <div class="scroll-cue__arrow"></div>
+  </div>
+
+  <!-- Sections -->
+  <div class="sections-wrap" id="sections-wrap"></div>
+
+  <script>
+    // ── Config ──────────────────────────────────────────────────
+    const SECTIONS = [
+      {
+        bg: '#0a0a0f', fg: '#e8ff00',
+        seconds: 0,
+        title: 'SCROLL\nTHROUGH\nTIME',
+        body: 'Slide through each chapter. The clock ticks as the world shifts beneath you — background, palette, and seconds all rewritten by your movement.',
+        deco: '00',
+        label: '§ 001 — PROLOGUE',
+        timestamp: '00h 00m 00s',
+      },
+      {
+        bg: '#ff2d00', fg: '#fff5e0',
+        seconds: 7,
+        title: 'HEAT\nIN THE\nHORIZON',
+        body: 'Seven seconds in, and the temperature rises. The crimson bleeds across the canvas like a slow-burning fuse, relentless and warm.',
+        deco: '07',
+        label: '§ 002 — IGNITION',
+        timestamp: '00h 00m 07s',
+      },
+      {
+        bg: '#001aff', fg: '#ffedcf',
+        seconds: 14,
+        title: 'DEEP\nOCEAN\nFREQUENCY',
+        body: 'Fourteen seconds deep. Electric blue floods the viewport, a frequency only the ocean knows — cold, infinite, perfectly still.',
+        deco: '14',
+        label: '§ 003 — IMMERSION',
+        timestamp: '00h 00m 14s',
+      },
+      {
+        bg: '#00c896', fg: '#0d0d0d',
+        seconds: 21,
+        title: 'PULSE\nOF THE\nFOREST',
+        body: 'At 21 seconds, photosynthesis. The green is alive — not a color, but a heartbeat. Something ancient wakes beneath the roots.',
+        deco: '21',
+        label: '§ 004 — GROWTH',
+        timestamp: '00h 00m 21s',
+      },
+      {
+        bg: '#8b00ff', fg: '#f5f0ff',
+        seconds: 36,
+        title: 'VIOLET\nSIGNAL\nBROADCAST',
+        body: '36 seconds — the signal becomes visible. Ultraviolet thought transmitted through walls, bones, and the fabric of dreaming.',
+        deco: '36',
+        label: '§ 005 — TRANSMISSION',
+        timestamp: '00h 00m 36s',
+      },
+      {
+        bg: '#ff6b00', fg: '#fff0e0',
+        seconds: 47,
+        title: 'LAST\nGOLDEN\nEPOCH',
+        body: 'Forty-seven seconds. The amber hour. Every great thing that ever ended, ended exactly like this — glowing, warm, complete.',
+        deco: '47',
+        label: '§ 006 — EPILOGUE',
+        timestamp: '00h 00m 47s',
+      },
+    ];
+
+    // ── Build DOM ────────────────────────────────────────────────
+    const wrap = document.getElementById('sections-wrap');
+    const dotNav = document.getElementById('dot-nav');
+
+    SECTIONS.forEach((s, i) => {
+      // section
+      const sec = document.createElement('div');
+      sec.className = 'section';
+      sec.innerHTML = `
+    <div class="section__inner">
+      <div class="section__index">${s.label}</div>
+      <h2 class="section__title">${s.title}</h2>
+      <p class="section__body">${s.body}</p>
+    </div>
+    <div class="section__deco">${s.deco}</div>
+    <div class="section__timestamp">${s.timestamp}</div>
+  `;
+      wrap.appendChild(sec);
+
+      // dot
+      const dot = document.createElement('div');
+      dot.className = 'dot';
+      dot.dataset.index = i;
+      dotNav.appendChild(dot);
+    });
+
+    // ── State ────────────────────────────────────────────────────
+    let currentSection = 0;
+    let cursorX = 0, cursorY = 0;
+    let targetCX = 0, targetCY = 0;
+    let displayedSeconds = 0;
+    let targetSeconds = 0;
+
+    const overlay = document.getElementById('bg-overlay');
+    const timerEl = document.getElementById('timer-seconds');
+    const progressEl = document.getElementById('hud-progress');
+    const dots = document.querySelectorAll('.dot');
+    const sections = document.querySelectorAll('.section');
+    const cursor = document.querySelector('.cursor');
+    const scrollCue = document.querySelector('.scroll-cue');
+
+    // ── Color lerp ───────────────────────────────────────────────
+    function hexToRgb(hex) {
+      return [
+        parseInt(hex.slice(1, 3), 16),
+        parseInt(hex.slice(3, 5), 16),
+        parseInt(hex.slice(5, 7), 16),
+      ];
+    }
+    function lerp(a, b, t) { return a + (b - a) * t; }
+    function lerpColor(h1, h2, t) {
+      const [r1, g1, b1] = hexToRgb(h1), [r2, g2, b2] = hexToRgb(h2);
+      return `rgb(${Math.round(lerp(r1, r2, t))},${Math.round(lerp(g1, g2, t))},${Math.round(lerp(b1, b2, t))})`;
+    }
+
+    // ── Activate section ─────────────────────────────────────────
+    function activateSection(idx) {
+      if (idx === currentSection) return;
+      currentSection = idx;
+      dots.forEach((d, i) => d.classList.toggle('active', i === idx));
+      targetSeconds = SECTIONS[idx].seconds;
+    }
+
+    // ── Scroll ───────────────────────────────────────────────────
+    function onScroll() {
+      const scrollY = window.scrollY;
+      const winH = window.innerHeight;
+      const totalH = document.body.scrollHeight - winH;
+
+      // progress bar
+      progressEl.style.height = Math.min(scrollY / totalH, 1) * 100 + '%';
+
+      // hide scroll cue
+      if (scrollY > 80) scrollCue.classList.add('hidden');
+
+      // smooth bg interpolation
+      const raw = scrollY / winH;
+      const fi = Math.min(Math.floor(raw), SECTIONS.length - 1);
+      const ci = Math.min(fi + 1, SECTIONS.length - 1);
+      const t = raw - fi;
+      overlay.style.backgroundColor = lerpColor(SECTIONS[fi].bg, SECTIONS[ci].bg, t);
+
+      // dominant section
+      activateSection(t > 0.5 ? ci : fi);
+
+      // text reveal
+      sections.forEach((sec) => {
+        const rect = sec.getBoundingClientRect();
+        sec.classList.toggle('is-visible', rect.top < winH * 0.65 && rect.bottom > winH * 0.35);
+      });
+    }
+
+    // ── Cursor ───────────────────────────────────────────────────
+    document.addEventListener('mousemove', e => { targetCX = e.clientX; targetCY = e.clientY; });
+    document.addEventListener('mousedown', () => cursor.classList.add('expand'));
+    document.addEventListener('mouseup', () => cursor.classList.remove('expand'));
+
+    // ── Dot nav ──────────────────────────────────────────────────
+    dots.forEach((dot, i) => {
+      dot.addEventListener('click', () => {
+        window.scrollTo({ top: i * window.innerHeight, behavior: 'smooth' });
+      });
+    });
+
+    // ── RAF loop ─────────────────────────────────────────────────
+    function loop() {
+      // cursor
+      cursorX = lerp(cursorX, targetCX, 0.15);
+      cursorY = lerp(cursorY, targetCY, 0.15);
+      cursor.style.left = cursorX + 'px';
+      cursor.style.top = cursorY + 'px';
+      cursor.style.color = SECTIONS[currentSection].fg;
+
+      // seconds counter
+      if (Math.abs(displayedSeconds - targetSeconds) > 0.3) {
+        displayedSeconds = lerp(displayedSeconds, targetSeconds, 0.07);
+        timerEl.textContent = Math.round(displayedSeconds).toString().padStart(2, '0');
+      } else {
+        displayedSeconds = targetSeconds;
+        timerEl.textContent = targetSeconds.toString().padStart(2, '0');
+      }
+
+      requestAnimationFrame(loop);
+    }
+
+    // ── Init ─────────────────────────────────────────────────────
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+    dots[0]?.classList.add('active');
+    loop();
+  </script>
+</body>
+
+</html>
