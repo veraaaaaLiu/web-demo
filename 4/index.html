@@ -22,6 +22,7 @@
 
     html {
       scroll-behavior: auto;
+      overflow-x: hidden;
     }
 
     :root {
@@ -90,6 +91,19 @@
       left: 0;
       display: block;
       will-change: transform;
+    }
+
+    /* Mobile: show native video, hide canvas */
+    @media (max-width: 768px) {
+      #video-stage video {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+      #video-stage canvas {
+        display: none;
+      }
     }
 
     #video-stage::after {
@@ -603,9 +617,9 @@
     /* ── Responsive ─────────────────────────────── */
     @media (max-width: 768px) {
       /* Reduce blur on mobile for performance */
-      :root {
-        --glass-blur: 10px;
-      }
+      :root { --glass-blur: 10px; }
+      body { cursor: auto; }
+      .cursor { display: none; }
       .chapter-indicator {
         -webkit-backdrop-filter: blur(8px);
         backdrop-filter: blur(8px);
@@ -616,19 +630,23 @@
         backdrop-filter: blur(12px);
       }
 
-      .chapter { padding: 4rem 0; }
-      .chapter--right { justify-content: flex-start; }
+      .chapter { padding: 4rem 0; justify-content: center; text-align: center; overflow: hidden; }
+      .chapter__number { display: none; }
+      .chapter--right { justify-content: center; }
       .chapter__card {
         padding: 2rem 1.5rem;
         max-width: 100%;
+        width: 100%;
         border-radius: 0;
         border-left: none;
         border-right: none;
       }
+      .chapter__label { justify-content: center; }
       .chapter-indicator { left: 1rem; top: 1rem; padding: .6rem .8rem; }
       .hero__card {
         margin: 0;
         padding: 2.5rem 1.5rem;
+        width: 100%;
         max-width: 100%;
         border-radius: 0;
         border-left: none;
@@ -636,6 +654,7 @@
       }
       .finale__card {
         margin: 0;
+        width: 100%;
         max-width: 100%;
         border-radius: 0;
         border-left: none;
@@ -829,77 +848,18 @@
     });
 
 
-    // ── Video + Canvas ──────────────────────────────────────────
+    // ── Platform detection ────────────────────────────────────────
+    const isMobile = window.innerWidth <= 768;
     const video = document.getElementById('scroll-video');
     const canvas = document.getElementById('scroll-canvas');
-    const ctx = canvas.getContext('2d');
     const loaderEl = document.getElementById('loader');
     const loaderFill = document.getElementById('loader-fill');
-    let videoDuration = 0, isSeeking = false;
-
-    // Use lower resolution canvas on mobile for performance
-    const isMobile = window.innerWidth <= 768;
-    const canvasScale = isMobile ? 0.5 : 1;
-
-    function sizeCanvas() {
-      const w = window.innerWidth;
-      const h = window.innerHeight;
-      canvas.width = Math.round(w * canvasScale);
-      canvas.height = Math.round(h * canvasScale);
-      canvas.style.width = w + 'px';
-      canvas.style.height = h + 'px';
-      drawFrame();
-    }
-    sizeCanvas();
-    window.addEventListener('resize', sizeCanvas);
-
-    // Cover-fit: fill entire canvas, crop excess, keep aspect ratio, center
-    function drawFrame() {
-      if (video.readyState < 2) return;
-      const vw = video.videoWidth, vh = video.videoHeight;
-      const cw = canvas.width, ch = canvas.height;
-      const scale = Math.max(cw / vw, ch / vh);
-      const sw = cw / scale;
-      const sh = ch / scale;
-      const sx = (vw - sw) / 2;
-      const sy = (vh - sh) / 2;
-      ctx.drawImage(video, sx, sy, sw, sh, 0, 0, cw, ch);
-    }
-
-    if ('requestVideoFrameCallback' in HTMLVideoElement.prototype) {
-      (function rvfc() { drawFrame(); video.requestVideoFrameCallback(rvfc); })();
-    }
-
-    function onVideoReady() {
-      videoDuration = video.duration || 0;
-      video.pause();
-      video.currentTime = 0;
-      loaderFill.style.width = '100%';
-      video.addEventListener('seeked', function first() { drawFrame(); video.removeEventListener('seeked', first); });
-      setTimeout(() => loaderEl.classList.add('gone'), 400);
-    }
-    if (video.readyState >= 1) onVideoReady();
-    else video.addEventListener('loadedmetadata', onVideoReady, { once: true });
-
-    video.addEventListener('seeking', () => { isSeeking = true; });
-    video.addEventListener('seeked', () => {
-      isSeeking = false;
-      if (!('requestVideoFrameCallback' in HTMLVideoElement.prototype)) drawFrame();
-    });
-
-    setTimeout(() => {
-      if (!loaderEl.classList.contains('gone')) {
-        videoDuration = video.duration || 30;
-        video.pause();
-        loaderFill.style.width = '100%';
-        loaderEl.classList.add('gone');
-      }
-    }, 5000);
 
     // ── State ────────────────────────────────────────────────────
     let smoothTime = 0, targetTime = 0;
     let cx = 0, cy = 0, tx = 0, ty = 0;
     let currentNav = -1;
+    let videoDuration = 0, isSeeking = false;
 
     const progressBar = document.getElementById('progress');
     const chLabel = document.getElementById('ch-label');
@@ -909,12 +869,97 @@
 
     function lerp(a, b, t) { return a + (b - a) * t; }
 
-    // Lock viewport height on first load to avoid address bar resize jitter
-    let stableVH = window.innerHeight;
+    // Lock viewport height on mobile
+    const stableVH = window.innerHeight;
+
     if (isMobile) {
-      document.documentElement.style.setProperty('--stable-vh', stableVH + 'px');
+      // ── MOBILE: native <video> + scroll-driven seek (no canvas) ──
+      video.muted = true;
+      video.playsInline = true;
+      video.preload = 'auto';
+      video.pause();
+
+      function onMobileVideoReady() {
+        videoDuration = video.duration || 0;
+        video.currentTime = 0;
+        loaderFill.style.width = '100%';
+        setTimeout(() => loaderEl.classList.add('gone'), 300);
+      }
+      if (video.readyState >= 1) onMobileVideoReady();
+      else video.addEventListener('loadedmetadata', onMobileVideoReady, { once: true });
+
+      video.addEventListener('seeking', () => { isSeeking = true; });
+      video.addEventListener('seeked', () => { isSeeking = false; });
+
+      setTimeout(() => {
+        if (!loaderEl.classList.contains('gone')) {
+          videoDuration = video.duration || 30;
+          loaderFill.style.width = '100%';
+          loaderEl.classList.add('gone');
+        }
+      }, 4000);
+
+    } else {
+      // ── DESKTOP: canvas + scroll-driven video ─────────────────
+      const ctx = canvas.getContext('2d');
+
+      function sizeCanvas() {
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        canvas.width = w;
+        canvas.height = h;
+        canvas.style.width = w + 'px';
+        canvas.style.height = h + 'px';
+        drawFrame();
+      }
+
+      function drawFrame() {
+        if (video.readyState < 2) return;
+        const vw = video.videoWidth, vh = video.videoHeight;
+        const cw = canvas.width, ch = canvas.height;
+        const scale = Math.max(cw / vw, ch / vh);
+        const sw = cw / scale;
+        const sh = ch / scale;
+        const sx = (vw - sw) / 2;
+        const sy = (vh - sh) / 2;
+        ctx.drawImage(video, sx, sy, sw, sh, 0, 0, cw, ch);
+      }
+
+      sizeCanvas();
+      window.addEventListener('resize', sizeCanvas);
+
+      if ('requestVideoFrameCallback' in HTMLVideoElement.prototype) {
+        (function rvfc() { drawFrame(); video.requestVideoFrameCallback(rvfc); })();
+      }
+
+      function onVideoReady() {
+        videoDuration = video.duration || 0;
+        video.pause();
+        video.currentTime = 0;
+        loaderFill.style.width = '100%';
+        video.addEventListener('seeked', function first() { drawFrame(); video.removeEventListener('seeked', first); });
+        setTimeout(() => loaderEl.classList.add('gone'), 400);
+      }
+      if (video.readyState >= 1) onVideoReady();
+      else video.addEventListener('loadedmetadata', onVideoReady, { once: true });
+
+      video.addEventListener('seeking', () => { isSeeking = true; });
+      video.addEventListener('seeked', () => {
+        isSeeking = false;
+        if (!('requestVideoFrameCallback' in HTMLVideoElement.prototype)) drawFrame();
+      });
+
+      setTimeout(() => {
+        if (!loaderEl.classList.contains('gone')) {
+          videoDuration = video.duration || 30;
+          video.pause();
+          loaderFill.style.width = '100%';
+          loaderEl.classList.add('gone');
+        }
+      }, 5000);
     }
 
+    // ── Scroll handler (both platforms) ──────────────────────────
     function onScroll() {
       const sy = window.scrollY;
       const winH = isMobile ? stableVH : window.innerHeight;
@@ -944,26 +989,33 @@
       }
     }
 
-    // ── Cursor ───────────────────────────────────────────────────
-    const cursor = document.querySelector('.cursor');
-    document.addEventListener('mousemove', e => { tx = e.clientX; ty = e.clientY; });
-    document.addEventListener('mousedown', () => cursor.classList.add('expand'));
-    document.addEventListener('mouseup', () => cursor.classList.remove('expand'));
+    // ── Cursor (desktop only) ────────────────────────────────────
+    if (!isMobile) {
+      const cursor = document.querySelector('.cursor');
+      document.addEventListener('mousemove', e => { tx = e.clientX; ty = e.clientY; });
+      document.addEventListener('mousedown', () => cursor.classList.add('expand'));
+      document.addEventListener('mouseup', () => cursor.classList.remove('expand'));
+    }
 
     // ── RAF loop ─────────────────────────────────────────────────
     function loop() {
-      cx = lerp(cx, tx, 0.12);
-      cy = lerp(cy, ty, 0.12);
-      cursor.style.left = cx + 'px';
-      cursor.style.top = cy + 'px';
+      // Smooth cursor (desktop only)
+      if (!isMobile) {
+        cx = lerp(cx, tx, 0.12);
+        cy = lerp(cy, ty, 0.12);
+        document.querySelector('.cursor').style.left = cx + 'px';
+        document.querySelector('.cursor').style.top = cy + 'px';
+      }
 
+      // Smooth video scrub (both platforms)
       const delta = targetTime - smoothTime;
       if (Math.abs(delta) > 0.01) {
-        smoothTime = lerp(smoothTime, targetTime, Math.abs(delta) > 2 ? 0.06 : 0.12);
+        const speed = isMobile ? 0.18 : (Math.abs(delta) > 2 ? 0.06 : 0.12);
+        smoothTime = lerp(smoothTime, targetTime, speed);
       } else {
         smoothTime = targetTime;
       }
-      const seekThreshold = isMobile ? 0.12 : 0.04;
+      const seekThreshold = isMobile ? 0.15 : 0.04;
       if (videoDuration > 0 && !isSeeking && Math.abs(video.currentTime - smoothTime) > seekThreshold) {
         video.currentTime = smoothTime;
       }
