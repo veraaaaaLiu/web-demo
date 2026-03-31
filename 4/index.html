@@ -76,7 +76,11 @@
     /* ── Video background ─────────────────────── */
     #video-stage {
       position: fixed;
-      inset: 0;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100vh;
+      height: 100svh;
       z-index: 0;
       background: #000;
     }
@@ -620,6 +624,10 @@
       :root { --glass-blur: 10px; }
       body { cursor: auto; }
       .cursor { display: none; }
+      /* Use JS-locked height to prevent address bar jitter */
+      .hero, .finale { height: var(--svh, 100svh); }
+      .chapter { min-height: var(--svh, 100svh); }
+      .spacer { height: calc(var(--svh, 100svh) * 0.9); }
       .chapter-indicator {
         -webkit-backdrop-filter: blur(8px);
         backdrop-filter: blur(8px);
@@ -869,8 +877,14 @@
 
     function lerp(a, b, t) { return a + (b - a) * t; }
 
-    // Lock viewport height on mobile
+    // Lock viewport height on mobile to prevent address bar resize jitter
     const stableVH = window.innerHeight;
+    if (isMobile) {
+      const root = document.documentElement;
+      root.style.setProperty('--svh', stableVH + 'px');
+      // Apply locked height to video stage and all sections
+      document.getElementById('video-stage').style.height = stableVH + 'px';
+    }
 
     if (isMobile) {
       // ── MOBILE: native <video> + scroll-driven seek (no canvas) ──
