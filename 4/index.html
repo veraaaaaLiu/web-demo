@@ -294,6 +294,7 @@
     /* ── HERO section ──────────────────────────── */
     .hero {
       height: 100vh;
+      height: 100svh;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -369,6 +370,7 @@
     /* ── Narrative chapter (glass card) ─────────── */
     .chapter {
       min-height: 100vh;
+      min-height: 100svh;
       display: flex;
       align-items: center;
       position: relative;
@@ -557,11 +559,13 @@
     /* ── Spacer ─────────────────────────────────── */
     .spacer {
       height: 90vh;
+      height: 90svh;
     }
 
     /* ── Finale (glass) ─────────────────────────── */
     .finale {
       height: 100vh;
+      height: 100svh;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -949,9 +953,15 @@
 
     function lerp(a, b, t) { return a + (b - a) * t; }
 
+    // Lock viewport height on first load to avoid address bar resize jitter
+    let stableVH = window.innerHeight;
+    if (isMobile) {
+      document.documentElement.style.setProperty('--stable-vh', stableVH + 'px');
+    }
+
     function onScroll() {
       const sy = window.scrollY;
-      const winH = window.innerHeight;
+      const winH = isMobile ? stableVH : window.innerHeight;
       const totH = document.body.scrollHeight - winH;
       const prog = totH > 0 ? Math.min(sy / totH, 1) : 0;
 
