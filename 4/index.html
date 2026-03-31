@@ -85,13 +85,12 @@
     }
 
     #video-stage canvas {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
+      position: absolute;
+      top: 0;
+      left: 0;
       display: block;
     }
 
-    /* Subtle darkening for readability, but not too heavy — glass does the work */
     #video-stage::after {
       content: '';
       position: absolute;
@@ -891,15 +890,28 @@
     let videoDuration = 0, isSeeking = false;
 
     function sizeCanvas() {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-      if (video.readyState >= 2) ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      canvas.width = w;
+      canvas.height = h;
+      canvas.style.width = w + 'px';
+      canvas.style.height = h + 'px';
+      drawFrame();
     }
     sizeCanvas();
     window.addEventListener('resize', sizeCanvas);
 
+    // Cover-fit: fill entire canvas, crop excess, keep aspect ratio, center
     function drawFrame() {
-      if (video.readyState >= 2) ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      if (video.readyState < 2) return;
+      const vw = video.videoWidth, vh = video.videoHeight;
+      const cw = canvas.width, ch = canvas.height;
+      const scale = Math.max(cw / vw, ch / vh);
+      const sw = cw / scale;
+      const sh = ch / scale;
+      const sx = (vw - sw) / 2;
+      const sy = (vh - sh) / 2;
+      ctx.drawImage(video, sx, sy, sw, sh, 0, 0, cw, ch);
     }
 
     if ('requestVideoFrameCallback' in HTMLVideoElement.prototype) {
