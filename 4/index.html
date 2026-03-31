@@ -1,0 +1,1012 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>時間的通道 — 滾動敘事</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Mono:wght@300;400&family=Bebas+Neue&display=swap"
+    rel="stylesheet" />
+
+  <style>
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      scroll-behavior: auto;
+    }
+
+    :root {
+      --sans: 'Noto Sans TC', 'Helvetica Neue', Arial, sans-serif;
+      --serif: 'Playfair Display', Georgia, serif;
+      --mono: 'DM Mono', monospace;
+      --display: 'Bebas Neue', sans-serif;
+      --ease: cubic-bezier(0.16, 1, 0.3, 1);
+      --gold: #c9a96e;
+      --dim: rgba(255, 255, 255, .4);
+      --glass-bg: rgba(180, 210, 230, .12);
+      --glass-border: rgba(255, 255, 255, .12);
+      --glass-blur: 22px;
+    }
+
+    body {
+      font-family: var(--sans);
+      background: #000;
+      color: #fff;
+      overflow-x: hidden;
+      cursor: none;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Custom cursor ──────────────────────────── */
+    .cursor {
+      /* position: fixed;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      border: 1.5px solid rgba(255,255,255,.6);
+      pointer-events: none;
+      z-index: 9999;
+      transform: translate(-50%, -50%);
+      transition: width .25s var(--ease), height .25s var(--ease), background .25s;
+      mix-blend-mode: difference; */
+      position: fixed;
+      transform: translate(-50%, -50%);
+      width: 10px;
+      height: 10px;
+      background-color: #fff;
+      pointer-events: none;
+      z-index: 9999;
+    }
+
+    .cursor.expand {
+      /* width: 48px;
+      height: 48px; */
+      /* background: rgba(255, 255, 255, .08); */
+    }
+
+    /* ── Video background ─────────────────────── */
+    #video-stage {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      background: #000;
+    }
+
+    #video-stage video {
+      display: none;
+    }
+
+    #video-stage canvas {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    /* Subtle darkening for readability, but not too heavy — glass does the work */
+    #video-stage::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, .25);
+      z-index: 1;
+    }
+
+    /* Grain */
+    .grain {
+      position: fixed;
+      inset: -50%;
+      width: 200%;
+      height: 200%;
+      z-index: 2;
+      pointer-events: none;
+      opacity: .03;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+      animation: grain .15s steps(1) infinite;
+    }
+
+    @keyframes grain {
+      0% {
+        transform: translate(0, 0)
+      }
+
+      25% {
+        transform: translate(-2%, -3%)
+      }
+
+      50% {
+        transform: translate(3%, 1%)
+      }
+
+      75% {
+        transform: translate(-1%, 4%)
+      }
+    }
+
+    /* ── Glass mixin (reusable pattern) ────────── */
+    .glass {
+      background: var(--glass-bg);
+      -webkit-backdrop-filter: blur(var(--glass-blur));
+      backdrop-filter: blur(var(--glass-blur));
+      border: 1px solid var(--glass-border);
+      border-radius: 16px;
+    }
+
+    /* ── Story progress bar ────────────────────── */
+    .progress {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 0%;
+      height: 2px;
+      background: var(--gold);
+      z-index: 500;
+      transition: width .08s linear;
+    }
+
+    /* ── Chapter indicator (top-left, glass) ───── */
+    .chapter-indicator {
+      position: fixed;
+      top: 2rem;
+      left: 2.5rem;
+      z-index: 100;
+      pointer-events: none;
+      padding: .8rem 1.2rem;
+      background: rgba(180, 210, 230, .1);
+      -webkit-backdrop-filter: blur(14px);
+      backdrop-filter: blur(14px);
+      border: 1px solid rgba(255, 255, 255, .1);
+      border-radius: 10px;
+    }
+
+    .chapter-indicator__label {
+      font-family: var(--mono);
+      font-size: .5rem;
+      letter-spacing: .35em;
+      text-transform: uppercase;
+      color: var(--gold);
+    }
+
+    .chapter-indicator__title {
+      font-family: var(--sans);
+      font-size: .8rem;
+      font-style: italic;
+      color: #fff;
+      opacity: .7;
+      margin-top: .2rem;
+    }
+
+    /* ── Side nav dots ─────────────────────────── */
+    .side-nav {
+      position: fixed;
+      right: 2.5rem;
+      top: 50%;
+      transform: translateY(-50%);
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      gap: 1.2rem;
+      mix-blend-mode: exclusion;
+    }
+
+    .side-nav__dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      border: 1px solid rgba(255, 255, 255, .3);
+      background: transparent;
+      cursor: pointer;
+      transition: all .4s var(--ease);
+      position: relative;
+    }
+
+    .side-nav__dot.active {
+      background: #fff;
+      border-color: #fff;
+      transform: scale(1.6);
+    }
+
+    .side-nav__dot::after {
+      content: attr(data-label);
+      position: absolute;
+      right: 18px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-family: var(--mono);
+      font-size: .5rem;
+      letter-spacing: .15em;
+      text-transform: uppercase;
+      color: #fff;
+      opacity: 0;
+      white-space: nowrap;
+      transition: opacity .3s;
+      pointer-events: none;
+    }
+
+    .side-nav__dot:hover::after {
+      opacity: .6;
+    }
+
+    /* ── Scroll cue ─────────────────────────────── */
+    .scroll-cue {
+      position: fixed;
+      bottom: 2.5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: .5rem;
+      mix-blend-mode: exclusion;
+      pointer-events: none;
+      transition: opacity .6s;
+    }
+
+    .scroll-cue span {
+      font-family: var(--mono);
+      font-size: .5rem;
+      letter-spacing: .4em;
+      text-transform: uppercase;
+      color: #fff;
+      opacity: .4;
+    }
+
+    .scroll-cue__line {
+      width: 1px;
+      height: 48px;
+      background: linear-gradient(to bottom, rgba(255, 255, 255, .4), transparent);
+      animation: cue-pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes cue-pulse {
+
+      0%,
+      100% {
+        transform: scaleY(1);
+        transform-origin: top;
+      }
+
+      50% {
+        transform: scaleY(.4);
+        transform-origin: top;
+      }
+    }
+
+    .scroll-cue.hidden {
+      opacity: 0;
+    }
+
+    /* ── Sections container ─────────────────────── */
+    .narrative {
+      position: relative;
+      z-index: 3;
+    }
+
+    /* ── HERO section ──────────────────────────── */
+    .hero {
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      position: relative;
+    }
+
+    .hero__card {
+      padding: clamp(3rem, 6vw, 5rem) clamp(2rem, 6vw, 5rem);
+      background: rgba(180, 210, 230, .1);
+      -webkit-backdrop-filter: blur(24px);
+      backdrop-filter: blur(24px);
+      border: 1px solid rgba(255, 255, 255, .1);
+      border-radius: 24px;
+      max-width: 700px;
+    }
+
+    .hero__eyebrow {
+      font-family: var(--mono);
+      font-size: .5rem;
+      letter-spacing: .5em;
+      text-transform: uppercase;
+      color: var(--gold);
+      margin-bottom: 2rem;
+      opacity: 0;
+      transform: translateY(20px);
+      transition: all 1s .2s var(--ease);
+    }
+
+    .hero__title {
+      font-family: var(--display);
+      font-size: clamp(3rem, 8vw, 6rem);
+      line-height: .9;
+      letter-spacing: .02em;
+      opacity: 0;
+      transform: translateY(40px);
+      transition: all 1.2s .4s var(--ease);
+    }
+
+    .hero__subtitle {
+      font-family: var(--sans);
+      font-style: italic;
+      font-size: clamp(.95rem, 1.6vw, 1.2rem);
+      font-weight: 400;
+      color: rgba(255, 255, 255, .55);
+      margin-top: 2rem;
+      line-height: 1.7;
+      opacity: 0;
+      transform: translateY(20px);
+      transition: all 1s .7s var(--ease);
+    }
+
+    .hero__divider {
+      width: 40px;
+      height: 1px;
+      background: var(--gold);
+      margin: 2.5rem auto 0;
+      opacity: 0;
+      transition: opacity 1.2s 1s;
+    }
+
+    .hero.is-visible .hero__eyebrow,
+    .hero.is-visible .hero__title,
+    .hero.is-visible .hero__subtitle {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .hero.is-visible .hero__divider {
+      opacity: 1;
+    }
+
+    /* ── Narrative chapter (glass card) ─────────── */
+    .chapter {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      position: relative;
+      padding: 6rem clamp(2rem, 8vw, 8rem);
+    }
+
+    .chapter--left {
+      justify-content: flex-start;
+    }
+
+    .chapter--right {
+      justify-content: flex-end;
+    }
+
+    .chapter--center {
+      justify-content: center;
+      text-align: center;
+    }
+
+    .chapter__card {
+      position: relative;
+      max-width: 540px;
+      padding: clamp(2rem, 4vw, 3.5rem) clamp(2rem, 4vw, 3rem);
+      background: var(--glass-bg);
+      -webkit-backdrop-filter: blur(var(--glass-blur));
+      backdrop-filter: blur(var(--glass-blur));
+      border: 1px solid var(--glass-border);
+      border-radius: 20px;
+      /* subtle inner glow */
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, .08),
+        0 8px 32px rgba(0, 0, 0, .15);
+    }
+
+    .chapter--center .chapter__card {
+      max-width: 640px;
+    }
+
+    .chapter__number {
+      font-family: var(--display);
+      font-size: clamp(6rem, 14vw, 12rem);
+      position: absolute;
+      color: #fff;
+      opacity: .04;
+      line-height: 1;
+      pointer-events: none;
+      user-select: none;
+      z-index: -1;
+    }
+
+    .chapter--left .chapter__number {
+      top: -2rem;
+      left: -3rem;
+    }
+
+    .chapter--right .chapter__number {
+      top: -2rem;
+      right: -3rem;
+    }
+
+    .chapter--center .chapter__number {
+      top: -3rem;
+      left: 50%;
+      transform: translateX(-50%);
+    }
+
+    .chapter__label {
+      font-family: var(--mono);
+      font-size: .5rem;
+      letter-spacing: .4em;
+      text-transform: uppercase;
+      color: var(--gold);
+      margin-bottom: 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: .8rem;
+      opacity: 0;
+      transform: translateY(16px);
+      transition: all .7s var(--ease);
+    }
+
+    .chapter__label::before {
+      content: '';
+      width: 20px;
+      height: 1px;
+      background: var(--gold);
+    }
+
+    .chapter--center .chapter__label {
+      justify-content: center;
+    }
+
+    .chapter__heading {
+      font-family: var(--sans);
+      font-size: clamp(1.6rem, 3vw, 2.4rem);
+      font-weight: 700;
+      line-height: 1.2;
+      margin-bottom: 1.5rem;
+      opacity: 0;
+      transform: translateY(30px);
+      transition: all .8s .1s var(--ease);
+    }
+
+    .chapter__body {
+      font-family: var(--sans);
+      font-size: clamp(.9rem, 1.1vw, 1.05rem);
+      font-weight: 400;
+      line-height: 1.85;
+      color: rgba(255, 255, 255, .7);
+      opacity: 0;
+      transform: translateY(20px);
+      transition: all .8s .2s var(--ease);
+    }
+
+    .chapter__divider {
+      width: 28px;
+      height: 1px;
+      background: var(--gold);
+      margin-top: 2rem;
+      opacity: 0;
+      transition: opacity .8s .4s;
+    }
+
+    .chapter--center .chapter__divider {
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .chapter.is-visible .chapter__label,
+    .chapter.is-visible .chapter__heading,
+    .chapter.is-visible .chapter__body {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .chapter.is-visible .chapter__divider {
+      opacity: .5;
+    }
+
+    /* ── Inline quote inside chapter card ─────── */
+    .chapter__quote {
+      margin-top: 2rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid rgba(255, 255, 255, .08);
+      opacity: 0;
+      transform: translateY(16px);
+      transition: all .8s .35s var(--ease);
+    }
+
+    .chapter__quote-text {
+      font-family: var(--sans);
+      font-style: italic;
+      font-size: clamp(.95rem, 1.3vw, 1.15rem);
+      line-height: 1.7;
+      color: rgba(255, 255, 255, .6);
+    }
+
+    .chapter__quote-text::before {
+      content: '\201C';
+      color: var(--gold);
+      opacity: .5;
+      margin-right: .15em;
+    }
+
+    .chapter__quote-text::after {
+      content: '\201D';
+      color: var(--gold);
+      opacity: .5;
+      margin-left: .1em;
+    }
+
+    .chapter__quote-attr {
+      font-family: var(--mono);
+      font-size: .5rem;
+      letter-spacing: .25em;
+      text-transform: uppercase;
+      color: var(--dim);
+      margin-top: .8rem;
+    }
+
+    .chapter.is-visible .chapter__quote {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* ── Spacer ─────────────────────────────────── */
+    .spacer {
+      height: 90vh;
+    }
+
+    /* ── Finale (glass) ─────────────────────────── */
+    .finale {
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+    }
+
+    .finale__card {
+      padding: clamp(3rem, 6vw, 5rem) clamp(3rem, 8vw, 6rem);
+      background: rgba(180, 210, 230, .1);
+      -webkit-backdrop-filter: blur(24px);
+      backdrop-filter: blur(24px);
+      border: 1px solid rgba(255, 255, 255, .1);
+      border-radius: 24px;
+    }
+
+    .finale__title {
+      font-family: var(--display);
+      font-size: clamp(3rem, 8vw, 6rem);
+      line-height: .85;
+      letter-spacing: .03em;
+      opacity: 0;
+      transform: translateY(50px);
+      transition: all 1.2s var(--ease);
+    }
+
+    .finale__sub {
+      font-family: var(--sans);
+      font-style: italic;
+      font-size: 1rem;
+      color: rgba(255, 255, 255, .4);
+      margin-top: 1.5rem;
+      opacity: 0;
+      transition: opacity 1s .4s;
+    }
+
+    .finale.is-visible .finale__title {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .finale.is-visible .finale__sub {
+      opacity: 1;
+    }
+
+    /* ── Loader ─────────────────────────────────── */
+    #loader {
+      position: fixed;
+      inset: 0;
+      z-index: 600;
+      background: #000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 1.2rem;
+      transition: opacity .8s, visibility .8s;
+    }
+
+    #loader.gone {
+      opacity: 0;
+      visibility: hidden;
+    }
+
+    #loader p {
+      font-family: var(--mono);
+      font-size: .55rem;
+      letter-spacing: .3em;
+      text-transform: uppercase;
+      color: var(--dim);
+    }
+
+    .loader-track {
+      width: 160px;
+      height: 1px;
+      background: rgba(255, 255, 255, .1);
+    }
+
+    .loader-fill {
+      height: 100%;
+      width: 0%;
+      background: var(--gold);
+      transition: width .15s linear;
+    }
+
+    /* ── Responsive ─────────────────────────────── */
+    @media (max-width: 768px) {
+      .chapter {
+        padding: 4rem 1.2rem;
+      }
+
+      .chapter--right {
+        justify-content: flex-start;
+      }
+
+      .chapter__card {
+        padding: 2rem 1.5rem;
+      }
+
+      .side-nav {
+        right: .8rem;
+        gap: .8rem;
+      }
+
+      .side-nav__dot::after {
+        display: none;
+      }
+
+      .chapter-indicator {
+        left: 1rem;
+        top: 1rem;
+        padding: .6rem .8rem;
+      }
+
+      .hero__card {
+        margin: 0 1rem;
+        padding: 2.5rem 1.5rem;
+      }
+
+      .pullquote__card {
+        margin: 0 1rem;
+      }
+
+      .finale__card {
+        margin: 0 1rem;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- Loader -->
+  <div id="loader">
+    <p>正在準備故事</p>
+    <div class="loader-track">
+      <div class="loader-fill" id="loader-fill"></div>
+    </div>
+  </div>
+
+  <!-- Grain -->
+  <div class="grain"></div>
+
+  <!-- Cursor -->
+  <div class="cursor"></div>
+
+  <!-- Video background -->
+  <div id="video-stage">
+    <video id="scroll-video" src="video.mp4" muted playsinline preload="auto"></video>
+    <canvas id="scroll-canvas"></canvas>
+  </div>
+
+  <!-- Progress bar -->
+  <div class="progress" id="progress"></div>
+
+  <!-- Chapter indicator -->
+  <div class="chapter-indicator">
+    <div class="chapter-indicator__label" id="ch-label">序章</div>
+    <div class="chapter-indicator__title" id="ch-title">起點</div>
+  </div>
+
+  <!-- Side nav -->
+  <nav class="side-nav" id="side-nav"></nav>
+
+  <!-- Scroll cue -->
+  <div class="scroll-cue" id="scroll-cue">
+    <span>開始</span>
+    <div class="scroll-cue__line"></div>
+  </div>
+
+  <!-- Narrative content -->
+  <div class="narrative" id="narrative"></div>
+
+  <script>
+    'use strict';
+
+    const STORY = [
+      {
+        type: 'hero',
+        eyebrow: '一段滾動驅動的敘事',
+        title: '時間的\n通道',
+        subtitle: '每一秒都承載一個世界。向下滾動，穿越時間 —— 影像隨你的旅程呼吸。',
+        chapter: '序章',
+        chapterTitle: '起點',
+      },
+      { type: 'spacer' },
+      {
+        type: 'chapter',
+        layout: 'left',
+        number: '01',
+        label: '第一章',
+        heading: '城市從不入眠，但它會做夢。',
+        body: '第零秒。霓虹動脈在玻璃峽谷中搏動。車流如緩慢的血液，在琥珀、紫羅蘭與電光白的塔樓下流淌。這座城市不懂沉默；它哼唱著一種只有不安之人才能聽見的頻率。',
+        quote: '時間不是一條線。它是一片你穿行其中的風景 —— 而你觸及的每一個點，都成為了當下。',
+        quoteAttr: '—— 敘事者',
+        chapter: '第一章',
+        chapterTitle: '霓虹脈搏',
+      },
+      { type: 'spacer' },
+      {
+        type: 'chapter',
+        layout: 'right',
+        number: '02',
+        label: '第二章',
+        heading: '海洋開始的地方，確定性就此終結。',
+        body: '潮汐以一種比記憶更古老的節奏到來。每一道浪都既是重複，也是發明 —— 從來不曾有過相同的崩塌。鹹風帶來千萬次離別的氣息。在這邊界之上，一切皆有可能。',
+        chapter: '第二章',
+        chapterTitle: '深海',
+      },
+      { type: 'spacer' },
+      {
+        type: 'chapter',
+        layout: 'center',
+        number: '03',
+        label: '第三章',
+        heading: '在喧囂之上，寂靜自有重量。',
+        body: '在高空，世間的爭論消融為白與藍。聲音抵達不了這裡 —— 只有光，沿著弧形地平線稀薄地延伸。你忽然明白，天空從來不是空的，它充滿了距離。',
+        quote: '我們並非穿過時刻。是時刻穿過我們 —— 留下殘餘，改變我們的組成。',
+        quoteAttr: '—— 敘事者',
+        chapter: '第三章',
+        chapterTitle: '雲之上',
+      },
+      { type: 'spacer' },
+      {
+        type: 'chapter',
+        layout: 'left',
+        number: '04',
+        label: '第四章',
+        heading: '森林用一種沒有文字的語言說話。',
+        body: '根系網絡在土壤之下傳遞化學信號 —— 警告、養分、記憶。樹冠將陽光過濾成一座綠色的大教堂。某種古老的東西在此移動，耐心而巨大，以世紀為單位呼吸。',
+        chapter: '第四章',
+        chapterTitle: '古木',
+      },
+      { type: 'spacer' },
+      {
+        type: 'chapter',
+        layout: 'right',
+        number: '05',
+        label: '第五章',
+        heading: '火記住了一切，然後徹底遺忘。',
+        body: '燃燒是看得見的蛻變。每一簇火焰都攜帶著燃料的幽魂 —— 木頭、油脂、意志。高溫改寫了分子，將物質化為光，將記憶化為灰燼。沒有什麼能不被改變地通過。',
+        quote: '信號抵達了深空。它將永遠旅行 —— 擴散、黯淡，但永不停止。一聲比說話者更長壽的低語。',
+        quoteAttr: '—— 最後的傳訊',
+        chapter: '第五章',
+        chapterTitle: '燃燒',
+      },
+      { type: 'spacer' },
+      {
+        type: 'finale',
+        title: '結束',
+        subtitle: '',
+        chapter: '終章',
+        chapterTitle: '結束',
+      },
+    ];
+
+    // ── Build DOM ────────────────────────────────────────────────
+    const narrative = document.getElementById('narrative');
+    const sideNav = document.getElementById('side-nav');
+    const navSections = [];
+
+    STORY.forEach((s) => {
+      const el = document.createElement('div');
+
+      if (s.type === 'hero') {
+        el.className = 'hero';
+        el.innerHTML = `
+          <div class="hero__card">
+            <div class="hero__eyebrow">${s.eyebrow}</div>
+            <h1 class="hero__title">${s.title}</h1>
+            <p class="hero__subtitle">${s.subtitle}</p>
+            <div class="hero__divider"></div>
+          </div>
+        `;
+        navSections.push({ el, label: s.chapter, data: s });
+      }
+      else if (s.type === 'chapter') {
+        el.className = 'chapter chapter--' + s.layout;
+        const quoteHtml = s.quote ? `
+            <div class="chapter__quote">
+              <div class="chapter__quote-text">${s.quote}</div>
+              <div class="chapter__quote-attr">${s.quoteAttr}</div>
+            </div>` : '';
+        el.innerHTML = `
+          <div class="chapter__number">${s.number}</div>
+          <div class="chapter__card">
+            <div class="chapter__label">${s.label}</div>
+            <h2 class="chapter__heading">${s.heading}</h2>
+            <p class="chapter__body">${s.body}</p>
+            <div class="chapter__divider"></div>
+            ${quoteHtml}
+          </div>
+        `;
+        navSections.push({ el, label: s.chapter || '', data: s });
+      }
+      else if (s.type === 'spacer') {
+        el.className = 'spacer';
+      }
+      else if (s.type === 'finale') {
+        el.className = 'finale';
+        el.innerHTML = `
+          <div class="finale__card">
+            <div class="finale__title">${s.title}</div>
+            <div class="finale__sub">${s.subtitle}</div>
+          </div>
+        `;
+        navSections.push({ el, label: s.chapter, data: s });
+      }
+
+      narrative.appendChild(el);
+    });
+
+    // Side nav dots
+    navSections.forEach((ns) => {
+      const dot = document.createElement('div');
+      dot.className = 'side-nav__dot';
+      dot.dataset.label = ns.label;
+      dot.addEventListener('click', () => ns.el.scrollIntoView({ behavior: 'smooth' }));
+      sideNav.appendChild(dot);
+    });
+
+    // ── Video + Canvas ──────────────────────────────────────────
+    const video = document.getElementById('scroll-video');
+    const canvas = document.getElementById('scroll-canvas');
+    const ctx = canvas.getContext('2d');
+    const loaderEl = document.getElementById('loader');
+    const loaderFill = document.getElementById('loader-fill');
+    let videoDuration = 0, isSeeking = false;
+
+    function sizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      if (video.readyState >= 2) ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    }
+    sizeCanvas();
+    window.addEventListener('resize', sizeCanvas);
+
+    function drawFrame() {
+      if (video.readyState >= 2) ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    }
+
+    if ('requestVideoFrameCallback' in HTMLVideoElement.prototype) {
+      (function rvfc() { drawFrame(); video.requestVideoFrameCallback(rvfc); })();
+    }
+
+    function onVideoReady() {
+      videoDuration = video.duration || 0;
+      video.pause();
+      video.currentTime = 0;
+      loaderFill.style.width = '100%';
+      video.addEventListener('seeked', function first() { drawFrame(); video.removeEventListener('seeked', first); });
+      setTimeout(() => loaderEl.classList.add('gone'), 400);
+    }
+    if (video.readyState >= 1) onVideoReady();
+    else video.addEventListener('loadedmetadata', onVideoReady, { once: true });
+
+    video.addEventListener('seeking', () => { isSeeking = true; });
+    video.addEventListener('seeked', () => {
+      isSeeking = false;
+      if (!('requestVideoFrameCallback' in HTMLVideoElement.prototype)) drawFrame();
+    });
+
+    setTimeout(() => {
+      if (!loaderEl.classList.contains('gone')) {
+        videoDuration = video.duration || 30;
+        video.pause();
+        loaderFill.style.width = '100%';
+        loaderEl.classList.add('gone');
+      }
+    }, 5000);
+
+    // ── State ────────────────────────────────────────────────────
+    let smoothTime = 0, targetTime = 0;
+    let cx = 0, cy = 0, tx = 0, ty = 0;
+    let currentNav = -1;
+
+    const progressBar = document.getElementById('progress');
+    const chLabel = document.getElementById('ch-label');
+    const chTitle = document.getElementById('ch-title');
+    const scrollCue = document.getElementById('scroll-cue');
+    const dots = document.querySelectorAll('.side-nav__dot');
+    const revealEls = document.querySelectorAll('.hero, .chapter, .finale');
+
+    function lerp(a, b, t) { return a + (b - a) * t; }
+
+    function onScroll() {
+      const sy = window.scrollY;
+      const winH = window.innerHeight;
+      const totH = document.body.scrollHeight - winH;
+      const prog = totH > 0 ? Math.min(sy / totH, 1) : 0;
+
+      progressBar.style.width = (prog * 100) + '%';
+      targetTime = prog * videoDuration;
+
+      if (sy > 80) scrollCue.classList.add('hidden');
+
+      revealEls.forEach(el => {
+        const r = el.getBoundingClientRect();
+        el.classList.toggle('is-visible', r.top < winH * 0.72 && r.bottom > winH * 0.28);
+      });
+
+      let activeIdx = 0;
+      navSections.forEach((ns, i) => {
+        if (ns.el.getBoundingClientRect().top < winH * 0.5) activeIdx = i;
+      });
+
+      if (activeIdx !== currentNav) {
+        currentNav = activeIdx;
+        dots.forEach((d, i) => d.classList.toggle('active', i === activeIdx));
+        const data = navSections[activeIdx].data;
+        if (data.chapter) chLabel.textContent = data.chapter;
+        if (data.chapterTitle) chTitle.textContent = data.chapterTitle;
+      }
+    }
+
+    // ── Cursor ───────────────────────────────────────────────────
+    const cursor = document.querySelector('.cursor');
+    document.addEventListener('mousemove', e => { tx = e.clientX; ty = e.clientY; });
+    document.addEventListener('mousedown', () => cursor.classList.add('expand'));
+    document.addEventListener('mouseup', () => cursor.classList.remove('expand'));
+
+    // ── RAF loop ─────────────────────────────────────────────────
+    function loop() {
+      cx = lerp(cx, tx, 0.12);
+      cy = lerp(cy, ty, 0.12);
+      cursor.style.left = cx + 'px';
+      cursor.style.top = cy + 'px';
+
+      const delta = targetTime - smoothTime;
+      if (Math.abs(delta) > 0.01) {
+        smoothTime = lerp(smoothTime, targetTime, Math.abs(delta) > 2 ? 0.06 : 0.12);
+      } else {
+        smoothTime = targetTime;
+      }
+      if (videoDuration > 0 && !isSeeking && Math.abs(video.currentTime - smoothTime) > 0.04) {
+        video.currentTime = smoothTime;
+      }
+
+      requestAnimationFrame(loop);
+    }
+
+    window.addEventListener('scroll', onScroll, { passive: true });
+    revealEls[0]?.classList.add('is-visible');
+    dots[0]?.classList.add('active');
+    loop();
+  </script>
+</body>
+
+</html>
