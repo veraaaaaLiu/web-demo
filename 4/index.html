@@ -89,6 +89,7 @@
       top: 0;
       left: 0;
       display: block;
+      will-change: transform;
     }
 
     #video-stage::after {
@@ -647,45 +648,31 @@
 
     /* ── Responsive ─────────────────────────────── */
     @media (max-width: 768px) {
-      .chapter {
-        padding: 4rem 1.2rem;
+      /* Reduce blur on mobile for performance */
+      :root {
+        --glass-blur: 10px;
       }
-
-      .chapter--right {
-        justify-content: flex-start;
-      }
-
-      .chapter__card {
-        padding: 2rem 1.5rem;
-      }
-
-      .side-nav {
-        right: .8rem;
-        gap: .8rem;
-      }
-
-      .side-nav__dot::after {
-        display: none;
-      }
-
       .chapter-indicator {
-        left: 1rem;
-        top: 1rem;
-        padding: .6rem .8rem;
+        -webkit-backdrop-filter: blur(8px);
+        backdrop-filter: blur(8px);
       }
-
-      .hero__card {
-        margin: 0 1rem;
-        padding: 2.5rem 1.5rem;
-      }
-
-      .pullquote__card {
-        margin: 0 1rem;
-      }
-
+      .hero__card,
       .finale__card {
-        margin: 0 1rem;
+        -webkit-backdrop-filter: blur(12px);
+        backdrop-filter: blur(12px);
       }
+
+      .chapter { padding: 4rem 1.2rem; }
+      .chapter--right { justify-content: flex-start; }
+      .chapter__card { padding: 2rem 1.5rem; }
+      .side-nav { right: .8rem; gap: .8rem; }
+      .side-nav__dot::after { display: none; }
+      .chapter-indicator { left: 1rem; top: 1rem; padding: .6rem .8rem; }
+      .hero__card { margin: 0 1rem; padding: 2.5rem 1.5rem; }
+      .finale__card { margin: 0 1rem; }
+
+      /* Disable grain animation on mobile */
+      .grain { animation: none; opacity: 0; }
     }
   </style>
 </head>
@@ -889,11 +876,15 @@
     const loaderFill = document.getElementById('loader-fill');
     let videoDuration = 0, isSeeking = false;
 
+    // Use lower resolution canvas on mobile for performance
+    const isMobile = window.innerWidth <= 768;
+    const canvasScale = isMobile ? 0.5 : 1;
+
     function sizeCanvas() {
       const w = window.innerWidth;
       const h = window.innerHeight;
-      canvas.width = w;
-      canvas.height = h;
+      canvas.width = Math.round(w * canvasScale);
+      canvas.height = Math.round(h * canvasScale);
       canvas.style.width = w + 'px';
       canvas.style.height = h + 'px';
       drawFrame();
@@ -1007,7 +998,8 @@
       } else {
         smoothTime = targetTime;
       }
-      if (videoDuration > 0 && !isSeeking && Math.abs(video.currentTime - smoothTime) > 0.04) {
+      const seekThreshold = isMobile ? 0.12 : 0.04;
+      if (videoDuration > 0 && !isSeeking && Math.abs(video.currentTime - smoothTime) > seekThreshold) {
         video.currentTime = smoothTime;
       }
 
