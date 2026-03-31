@@ -80,7 +80,7 @@
       left: 0;
       width: 100%;
       height: 100vh;
-      height: 100svh;
+      height: 100lvh;
       z-index: 0;
       background: #000;
     }
@@ -882,8 +882,9 @@
     if (isMobile) {
       const root = document.documentElement;
       root.style.setProperty('--svh', stableVH + 'px');
-      // Apply locked height to video stage and all sections
-      document.getElementById('video-stage').style.height = stableVH + 'px';
+      // Video stage uses larger height to always cover full screen
+      // (even when address bar hides and viewport grows)
+      document.getElementById('video-stage').style.height = '100lvh';
     }
 
     if (isMobile) {
